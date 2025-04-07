@@ -4,16 +4,19 @@ import pandas as pd
 import os
 import time
 
-
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
 
-
-output_dir = 'data'
-if not os.path.exists(output_dir):
-    os.makedirs(output_dir)
+default_output_dir = 'data'
+if not os.path.exists(default_output_dir):
+    os.makedirs(default_output_dir)
 
 labels = ['I_Love_You','How_Are_You','I_am_Fine_Thank_You']  
+
+folder_choices = {
+    '1': 'data',       # 亮度正常的資料
+    '2': 'dark_data'   # 低光環境的資料
+}
 
 cap = cv2.VideoCapture(0)
 
@@ -22,7 +25,7 @@ sequence_length = 60
 with mp_holistic.Holistic(min_detection_confidence=0.6, min_tracking_confidence=0.6) as holistic:
     while cap.isOpened():
         ret, frame = cap.read()
-        if ret == False:
+        if not ret:
             break
 
         image = cv2.flip(frame, 1)
@@ -39,12 +42,10 @@ with mp_holistic.Holistic(min_detection_confidence=0.6, min_tracking_confidence=
             print("開始錄製，請做出手語動作...")
             sequence = []
             current_label = None
-
-            frames_captured = 0 #新增
+            frames_captured = 0 
 
             while True:
                 ret, frame = cap.read()
-
                 if not ret:
                     break
 
@@ -55,9 +56,10 @@ with mp_holistic.Holistic(min_detection_confidence=0.6, min_tracking_confidence=
                 mp_drawing.draw_landmarks(image, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
                 mp_drawing.draw_landmarks(image, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
 
-                cv2.putText(image,
+                cv2.putText(
+                    image,
                     f"Recording: {frames_captured}/{sequence_length}",
-                    (10, 30),  # 顯示位置
+                    (10, 30), 
                     cv2.FONT_HERSHEY_SIMPLEX,
                     1,
                     (0, 255, 0),
@@ -65,7 +67,6 @@ with mp_holistic.Holistic(min_detection_confidence=0.6, min_tracking_confidence=
                 )
 
                 cv2.imshow('Recording', image)
-
 
                 if cv2.waitKey(10) & 0xFF == ord('q'):
                     break
@@ -92,13 +93,30 @@ with mp_holistic.Holistic(min_detection_confidence=0.6, min_tracking_confidence=
             if current_label not in labels:
                 print("無效的標籤，請重新錄製。")
             else:
-                # 將序列儲存為CSV
+                # 讓使用者選擇要存放的資料夾
+                print("選擇要存放的資料夾：")
+                for key, folder in folder_choices.items():
+                    print(f"{key}. {folder}")
+                folder_input = input("請輸入選項 (預設存 'data')：")
+
+                if folder_input in folder_choices:
+                    chosen_output_dir = folder_choices[folder_input]
+                else:
+                    chosen_output_dir = default_output_dir 
+
+                if not os.path.exists(chosen_output_dir):
+                    os.makedirs(chosen_output_dir)
+
                 df = pd.DataFrame(sequence)
                 df['Label'] = current_label
-                filename = os.path.join(output_dir, f"Daytime_{current_label}_{int(time.time())}.csv")
+                filename = os.path.join(
+                    chosen_output_dir,
+                    f"Daytime_{current_label}_{int(time.time())}.csv"
+                )
                 df.to_csv(filename, index=False)
                 print(f"資料已儲存至 {filename}")
 
+        # 按下 'q' 鍵退出
         if cv2.waitKey(10) & 0xFF == ord('q'):
             break
 
