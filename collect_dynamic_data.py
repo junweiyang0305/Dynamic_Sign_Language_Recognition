@@ -84,7 +84,8 @@ def denoise_image(image_bgr, h=10, hColor=10, templateWindowSize=5, searchWindow
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
 
-labels = ['I_Love_You','How_Are_You','I_am_Fine_Thank_You']
+labels = ['I_love_you','How_are_you','I_am_fine_thank_you',
+          'How_old_are_you','What_your_name']
 sequence_length = 60
 
 default_output_dir = 'data'
