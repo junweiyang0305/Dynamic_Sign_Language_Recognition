@@ -14,6 +14,7 @@ from tensorflow.keras.callbacks import EarlyStopping
 from sklearn.model_selection import KFold
 from sklearn.metrics import confusion_matrix
 
+
 import os
 
 # 1. 載入資料
