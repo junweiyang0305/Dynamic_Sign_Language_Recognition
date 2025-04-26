@@ -1,95 +1,55 @@
+import pandas as pd
+import glob
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from tensorflow.keras.utils import to_categorical
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import tensorflow as tf
+import os
 
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv1D, MaxPooling1D, Flatten, Dense, Dropout, LSTM
-from sklearn.metrics import confusion_matrix, classification_report
+# 讀取所有CSV檔案
+file_paths = glob.glob('data/*.csv')
+data_frames = [pd.read_csv(fp) for fp in file_paths]
+data = pd.concat(data_frames, ignore_index=True)
 
-# 載入資料
-X_train = np.load('data/X_train.npy')
-X_test = np.load('data/X_test.npy')
-y_train = np.load('data/y_train.npy')
-y_test = np.load('data/y_test.npy')
-label_classes = np.load('data/label_encoder.npy')
+# 分割特徵與標籤
+X = data.drop(columns=['Label']).values
+y = data['Label'].values
 
+# 定義序列長度
+sequence_length = 60  # 根據錄製時的設定
 
-cnn_lstm_model = Sequential([
-    Conv1D(filters=64, kernel_size=3, activation='relu',
-           input_shape=(X_train.shape[1], X_train.shape[2])),
-    MaxPooling1D(pool_size=2),
-    Conv1D(filters=128, kernel_size=3, activation='relu'),
-    MaxPooling1D(pool_size=2),
-    LSTM(100, return_sequences=False),
-    Dense(128, activation='relu'),
-    Dropout(0.5),
-    Dense(y_train.shape[1], activation='softmax')
-])
+# 創建序列
+def create_sequences(X, y, seq_length):
+    sequences = []
+    labels = []
+    for i in range(len(X) - seq_length + 1):
+        seq = X[i:i+seq_length]
+        label = y[i+seq_length-1]  # 序列的最後一個標籤作為整個序列的標籤
+        sequences.append(seq)
+        labels.append(label)
+    return np.array(sequences), np.array(labels)
 
-cnn_lstm_model.compile(optimizer='adam',
-                       loss='categorical_crossentropy',
-                       metrics=['accuracy'])
+X_seq, y_seq = create_sequences(X, y, sequence_length)
 
-cnn_lstm_model.summary()
+# 編碼標籤
+le = LabelEncoder()
+y_encoded = le.fit_transform(y_seq)
+y_onehot = to_categorical(y_encoded)
 
-history_cnn_lstm = cnn_lstm_model.fit(
-    X_train, y_train,
-    epochs=30,
-    batch_size=32,
-    validation_data=(X_test, y_test)
+# 分割訓練集與測試集
+X_train, X_test, y_train, y_test = train_test_split(
+    X_seq, y_onehot, test_size=0.2, random_state=42, stratify=y_onehot
 )
 
+# 儲存處理後的資料
+if not os.path.exists('data/models'):
+    os.makedirs('data/models')
 
-cnn_lstm_model.save('data/models/cnn_lstm_model.h5')
+np.save('data/X_train.npy', X_train)
+np.save('data/X_test.npy', X_test)
+np.save('data/y_train.npy', y_train)
+np.save('data/y_test.npy', y_test)
+np.save('data/label_encoder.npy', le.classes_)
 
-def plot_confusion_matrix_dl(model, X, y, title):
-    y_pred = model.predict(X)
-    y_pred_classes = np.argmax(y_pred, axis=1)
-    y_true = np.argmax(y, axis=1)
-    cm = confusion_matrix(y_true, y_pred_classes)
+print("資料前處理完成並儲存。")
 
-    cm_normalized = cm.astype(float) / cm.sum(axis=1, keepdims=True)
-    annot = [[f"{val * 100:.0f}%" for val in row] for row in cm_normalized]
-
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(cm_normalized,
-                annot=annot,
-                fmt="",
-                cmap='Blues',
-                xticklabels=label_classes,
-                yticklabels=label_classes,
-                vmin=0.0, vmax=1.0
-                )
-    plt.title(f"Confusion Matrix for {title}")
-    plt.xlabel('Predicted label')
-    plt.ylabel('True label')
-    plt.show()
-
-plot_confusion_matrix_dl(cnn_lstm_model, X_test, y_test, 'CNN + LSTM')
-
-loss_cnn_lstm, acc_cnn_lstm = cnn_lstm_model.evaluate(X_test, y_test)
-print(f"CNN + LSTM Test Accuracy: {acc_cnn_lstm:.4f}")
-
-def plot_history(history, title):
-    plt.figure(figsize=(12, 4))
-
-    plt.subplot(1, 2, 1)
-    plt.plot(history.history['accuracy'], label='training accuracy')
-    plt.plot(history.history['val_accuracy'], label='validation accuracy')
-    plt.title(f'{title} Accuracy')
-    plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
-    plt.legend()
-
-    plt.subplot(1, 2, 2)
-    plt.plot(history.history['loss'], label='training loss')
-    plt.plot(history.history['val_loss'], label='validation loss')
-    plt.title(f'{title} Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-
-    plt.show()
-
-plot_history(history_cnn_lstm, 'CNN + LSTM')

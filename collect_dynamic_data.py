@@ -5,7 +5,9 @@ import pandas as pd
 import time
 import os
 
-# (1)  (量測亮度 + gamma)
+######################################
+# (1) 動態補償函式 (量測亮度 + gamma)
+######################################
 
 def measure_brightness(image_bgr):
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
@@ -13,15 +15,17 @@ def measure_brightness(image_bgr):
 
 def decide_gamma(brightness, min_b=50, max_b=150):
     if brightness <= min_b:
-        return 2.5
+        return 2.0
     elif brightness >= max_b:
-        return 1.0
+        return 0.5
     else:
         ratio = (brightness - min_b) / (max_b - min_b)
-        gamma = 2.5 - ratio * 1.5
+        gamma = 2.0 - ratio * 1.0
         return gamma
 
-# (2) 灰階&自動白平衡
+######################################
+# (2) 灰世界自動白平衡 (Gray World)
+######################################
 
 def auto_white_balance_gray_world(image_bgr):
     b, g, r = cv2.split(image_bgr)
@@ -48,7 +52,9 @@ def auto_white_balance_gray_world(image_bgr):
 
     return cv2.merge((b_corr, g_corr, r_corr))
 
+######################################
 # (3) 增亮 (Gamma+CLAHE+WB)
+######################################
 
 def enhance_low_light(image, gamma=1.8, clipLimit=2.0, tileGridSize=(8,8)):
     look_up_table = np.empty((1,256), np.uint8)
@@ -66,9 +72,11 @@ def enhance_low_light(image, gamma=1.8, clipLimit=2.0, tileGridSize=(8,8)):
     balanced = auto_white_balance_gray_world(enhanced)
     return balanced
 
+######################################
 # (4) 去雜訊
+######################################
 
-def denoise_image(image_bgr, h=10, hColor=10, templateWindowSize=5, searchWindowSize=6):
+def denoise_image(image_bgr, h=10, hColor=10, templateWindowSize=1, searchWindowSize=1):
     denoised = cv2.fastNlMeansDenoisingColored(
         src=image_bgr,
         dst=None,
@@ -79,13 +87,15 @@ def denoise_image(image_bgr, h=10, hColor=10, templateWindowSize=5, searchWindow
     )
     return denoised
 
+######################################
 # (5) 資料收集主程式
+######################################
 
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
 
 labels = ['I_love_you','How_are_you','I_am_fine_thank_you',
-          'How_old_are_you','What_your_name']
+          'How_old_are_you','What_your_name','You_look_so_young']
 sequence_length = 60
 
 default_output_dir = 'data'
@@ -94,8 +104,8 @@ if not os.path.exists(default_output_dir):
 
 cap = cv2.VideoCapture(0)
 
-with mp_holistic.Holistic(min_detection_confidence=0.6,
-                          min_tracking_confidence=0.6) as holistic:
+with mp_holistic.Holistic(min_detection_confidence=0.7,
+                          min_tracking_confidence=0.7) as holistic:
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -187,7 +197,7 @@ with mp_holistic.Holistic(min_detection_confidence=0.6,
                     break
 
             # 要求輸入標籤
-            print("請輸入手語標籤：", labels)
+            print("請輸入手語標籤：\n", labels)
             current_label = input("輸入標籤：")
             if current_label not in labels:
                 print("無效標籤, 請重新錄製")
